@@ -21,10 +21,17 @@ WHITE = (255, 255, 255)
 
 SPAWN_RATE = 360
 FRAME_RATE=60
+
+#counters
 STARTING_BUCKS=15
 BUCK_RATE=120
 STARTING_BUCK_BOOSTER=1
 
+#win lose conditions
+MAX_BAD_REVIEWS=3
+WIN_TIME=FRAME_RATE*60*3 #number of times the game loop runs in one minute times 3 minutes
+
+#speeds
 REG_SPEED = 2
 SLOW_SPEED = 1
 
@@ -81,6 +88,8 @@ class VampireSprite(sprite.Sprite):
         #draw image to new location
         if self.health<=0 or self.rect.x<=100:
             self.kill()
+            if self.rect.x<=100:
+                counters.bad_reviews+=1
         else:
             game_window.blit(self.image, (self.rect.x, self.rect.y))
 
@@ -131,23 +140,21 @@ class InactiveTile(BackgroundTile):
         return None
 
     def draw_trap(self, game_window, trap_applicator):
-        pass
-
-
-
-
-            
+        pass 
             
 
 class Counters(object):
-    def __init__(self, pizza_bucks, buck_rate, buck_booster):
+    def __init__(self, pizza_bucks, buck_rate, buck_booster,timer):
         self.loop_count=0
         self.display_font=font.Font('gameassets/pizza_font.ttf',25)
         self.pizza_bucks=pizza_bucks
         self.buck_rate=buck_rate
         self.buck_booster=buck_booster
         self.bucks_rect = None
-
+        self.timer=timer
+        self.timer_rect=None
+        self.bad_reviews=0
+        self.bad_rev_rect=None
 
     def increment_bucks(self):
         if self.loop_count % self.buck_rate ==0:
@@ -162,10 +169,30 @@ class Counters(object):
         self.bucks_rect.y=WINDOW_HEIGHT-50
         game_window.blit(bucks_surf,self.bucks_rect)
 
+    def draw_bad_reviews(self,game_window):
+        if bool(self.bad_rev_rect):
+            game_window.blit(BACKGROUND,(self.bad_rev_rect.x,self.bad_rev_rect.y),self.bad_rev_rect)
+        bad_rev_surf=self.display_font.render(str(self.bad_reviews),True,WHITE)
+        self.bad_rev_rect=bad_rev_surf.get_rect()
+        self.bad_rev_rect.x=WINDOW_WIDTH-150
+        self.bad_rev_rect.y=WINDOW_HEIGHT-50
+        game_window.blit(bad_rev_surf, self.bad_rev_rect)
+
+    def draw_timer(self, game_window):
+        if bool(self.timer_rect):
+            game_window.blit(BACKGROUND, (self.timer_rect.x, self.timer_rect.y),self.timer_rect)
+        timer_surf=self.display_font.render(str(WIN_TIME-self.loop_count//FRAME_RATE),True,WHITE)
+        self.timer_rect=timer_surf.get_rect()
+        self.timer_rect.x=WINDOW_WIDTH-250
+        self.timer_rect.y=WINDOW_HEIGHT-50
+        game_window.blit(timer_surf, self.timer_rect)
+
     def update(self, game_window):
         self.loop_count+=1
         self.increment_bucks()
         self.draw_bucks(game_window)
+        self.draw_bad_reviews(game_window)
+        self.draw_timer(game_window)
 
 class Trap(object):
      def __init__(self, trap_kind, cost, trap_img):
@@ -186,7 +213,7 @@ class TrapApplicator(object):
 #class instances and groupd
 all_vampires=sprite.Group()
 
-counters=Counters(STARTING_BUCKS,BUCK_RATE,STARTING_BUCK_BOOSTER)
+counters=Counters(STARTING_BUCKS,BUCK_RATE,STARTING_BUCK_BOOSTER,WIN_TIME)
 
 SLOW=Trap('SLOW',5,GARLIC)
 DAMAGE=Trap('DAMAGE',3,CUTTER)
@@ -230,11 +257,13 @@ GAME_WINDOW.blit(BACKGROUND, (0,0))
 #-------------------------------------
 #game loop
 game_running = True
+program_running=True
 
 while game_running:
     for event in pygame.event.get():
         if event.type == QUIT:
             game_running = False
+            program_running=False
 
 #event for when a user clicks in a space
         elif event.type == MOUSEBUTTONDOWN:
@@ -243,7 +272,6 @@ while game_running:
             y=coordinates[1]
             tile_y=y//100
             tile_x=x//100
-            #tile_grid[tile_y][tile_x].effect=True
             trap_applicator.select_tile(tile_grid[tile_y][tile_x],counters)
            
 
@@ -279,6 +307,13 @@ while game_running:
         if bool(right_tile):
             if right_tile!=left_tile:
                 vampire.attack(right_tile)
+
+        #------------------------------
+        #win lose condiitons
+        if counters.bad_reviews >= MAX_BAD_REVIEWS:
+            game_running=False
+        if counters.loop_count > WIN_TIME:
+            game_running=False
                 
 
     
@@ -295,8 +330,32 @@ while game_running:
     counters.update(GAME_WINDOW)       
     display.update()
 
-clock.tick(FRAME_RATE)
+    clock.tick(FRAME_RATE)
+
+#close main game loop    
 #--------------------
 
+
+
+end_font=font.Font('gameassets/pizza_font.ttf',50)
+if program_running:
+    if counters.bad_reviews >= MAX_BAD_REVIEWS:
+        end_surf=end_font.render('Game Over',True,WHITE)
+    else:
+        end_surf=end_font.render('You Win!',True,WHITE)
+    GAME_WINDOW.blit(end_surf, (350,200))    
+    display.update()
+
+
+#end of game loop
+while program_running:
+    for event in pygame.event.get():
+        if event.type == QUIT:
+            program_running=False
+    clock.tick(FRAME_RATE)
+
+#-----------------
+#close end of game loop
+    
 #clean up
 pygame.quit()
